@@ -51,14 +51,14 @@ processed_data <- censor_data(merged_data)
 
 
 processed_data <- processed_data %>% filter(State != "ANDAMAN AND NICOBAR")
-# Print processed data
-print(processed_data)
+
+
+
 
 
 state_wise_aqi <- read_csv("data/state-wise-aqi.csv")
 state_wise_aqi$State <- toupper(state_wise_aqi$State)
 final_merged_data <- merge(processed_data, state_wise_aqi, by = "State")
-print(final_merged_data)
-print(state_wise_aqi)
+keeps <- c("State"	,"Month",	"Deceased"	,"latitude"	,"longitude"	,"population"	,"Status"	,"AQI-US"		,"PM10"	,"Temp"	,"Humid")
 
-write_csv(final_merged_data, "data/processed_data.csv")
+write_csv(final_merged_data[keeps], "data/processed_data.csv")
