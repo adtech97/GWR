@@ -1,4 +1,4 @@
-State,Status,AQI-US,PM2.5,PM10,Temp,Humid
+State,Status,AQIUS,PM25,PM10,Temp,Humid
 Andhra Pradesh,MODERATE,67,20,47,31,66
 Arunachal Pradesh,MODERATE,93,32,49,22,82
 Assam,MODERATE,96,33,56,24,79
