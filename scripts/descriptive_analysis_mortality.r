@@ -7,7 +7,7 @@ library(mapdata)
 library(sf)
 library(sp)
 library(GWmodel)
-cleaned_data <- read_csv("C:/Users/Lenovo/OneDrive/Desktop/GWR-main/data/processed_data.csv")
+cleaned_data <- read_csv("data/processed_data.csv")
 
 # read map shape file
 indian_state_map = read_sf("assets/gadm36_IND_1.shp")
