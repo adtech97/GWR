@@ -1,330 +1,181 @@
-library(GWmodel)
-library(sp)
-library(raster)
-library(sf)
-library(GWmodel)
-library(sp)
-library(raster)
-library(sf)
-library(ggplot2)
-library(tmap)
-
-
-# Load the CSV data
-data <- read.csv("data/aggregated_data.csv")
-
-# Define dependent and independent variables
-dependent_var <- "Confirmed"
-independent_vars <- c("Recovered", "Deceased", "Tested", "AQIUS", "PM25", "PM10", "Temp", "Humid", "population")
-
-# Load India shapefile
-india_map <- "assets/gadm36_IND_filtered.shp"
-
-# Convert data to SpatialPointsDataFrame
-coordinates(data) <- c("longitude", "latitude")  # Assuming your CSV has longitude and latitude columns
-proj4string(data) <- CRS("+proj=longlat +datum=WGS84")  # Assuming WGS84 coordinate system
-
-# Define the equation for GWR
-eq <- paste(dependent_var, "~", paste(independent_vars, collapse = "+"))
-
-# Bandwidth selection
-bw <- bw.gwr(eq, 
-             data = data, 
-             approach = "AIC", 
-             kernel = "gaussian",
-             adaptive = TRUE, 
-             p = 2,
-             parallel.method = "omp",
-             parallel.arg = "omp")
-
-# Run GWR
-gwr_result <- gwr.basic(eq, 
-                        data = data, 
-                        bw = bw, 
-                        kernel = "gaussian", 
-                        adaptive = TRUE, 
-                        p = 2, 
-                        F123.test = FALSE,
-                        cv = FALSE,
-                        parallel.method = "omp",
-                        parallel.arg = "omp")
-
-gwr_result
-
-
-
-
-
-
-
-# Define data folder
-dataFolder <- "assets/"
-
-# Load the India shapefile
-india <- st_read("assets/gadm36_IND_filtered.shp")
-
-# Extract GWR results
-india$y <- gwr_result$SDF$y
-india$yhat <- gwr_result$SDF$yhat
-india$residual <- gwr_result$SDF$residual
-rsd <- sd(india$residual)
-india$stdRes <- india$residual / rsd
-india$LLN <- india$yhat - 1.645 * rsd
-india$ULN <- india$yhat + 1.645 * rsd
-
-# Intercept
-india$Intercept <- gwr_result$SDF$Intercept
-india$est_Recovered <- gwr_result$SDF$Recovered
-india$est_Deceased <- gwr_result$SDF$Deceased
-india$est_Tested <- gwr_result$SDF$Tested
-india$est_AQIUS <- gwr_result$SDF$AQIUS
-india$est_PM25 <- gwr_result$SDF$PM25
-india$est_PM10 <- gwr_result$SDF$PM10
-india$est_Temp <- gwr_result$SDF$Temp
-india$est_Humid <- gwr_result$SDF$Humid
-india$est_population <- gwr_result$SDF$population
-
-
-# T-values
-india$t_Intercept <- gwr_result$SDF$Intercept_TV
-india$t_Recovered <- gwr_result$SDF$Recovered_TV
-india$t_Deceased <- gwr_result$SDF$Deceased_TV
-india$t_Tested <- gwr_result$SDF$Tested_TV
-india$t_AQIUS <- gwr_result$SDF$AQIUS_TV
-india$t_PM25 <- gwr_result$SDF$PM25_TV
-india$t_PM10 <- gwr_result$SDF$PM10_TV
-india$t_Temp <- gwr_result$SDF$Temp_TV
-india$t_Humid <- gwr_result$SDF$Humid_TV
-india$t_population <- gwr_result$SDF$population_TV
-
-
-# Calculate pseudo-t values
-india$p_Recovered <- 2 * pt(-abs(gwr_result$SDF$Recovered_TV), df = 3103)
-india$p_Deceased <- 2 * pt(-abs(gwr_result$SDF$Deceased_TV), df = 3103)
-india$p_Tested <- 2 * pt(-abs(gwr_result$SDF$Tested_TV), df = 3103)
-india$p_AQIUS <- 2 * pt(-abs(gwr_result$SDF$AQIUS_TV), df = 3103)
-india$p_PM25 <- 2 * pt(-abs(gwr_result$SDF$PM25_TV), df = 3103)
-india$p_PM10 <- 2 * pt(-abs(gwr_result$SDF$PM10_TV), df = 3103)
-india$p_Temp <- 2 * pt(-abs(gwr_result$SDF$Temp_TV), df = 3103)
-india$p_Humid <- 2 * pt(-abs(gwr_result$SDF$Humid_TV), df = 3103)
-india$p_population <- 2 * pt(-abs(gwr_result$SDF$population_TV), df = 3103)
-
-# Significance indicators
-india$sig_Recovered <- ifelse(india$est_Recovered > 0 & india$p_Recovered <= 0.05, 1, 0)
-india$sig_Deceased <- ifelse(india$est_Deceased > 0 & india$p_Deceased <= 0.05, 1, 0)
-india$sig_Tested <- ifelse(india$est_Tested > 0 & india$p_Tested <= 0.05, 1, 0)
-india$sig_AQIUS <- ifelse(india$est_AQIUS > 0 & india$p_AQIUS <= 0.05, 1, 0)
-india$sig_PM25 <- ifelse(india$est_PM25 > 0 & india$p_PM25 <= 0.05, 1, 0)
-india$sig_PM10 <- ifelse(india$est_PM10 > 0 & india$p_PM10 <= 0.05, 1, 0)
-india$sig_Temp <- ifelse(india$est_Temp > 0 & india$p_Temp <= 0.05, 1, 0)
-india$sig_Humid <- ifelse(india$est_Humid > 0 & india$p_Humid <= 0.05, 1, 0)
-india$sig_population <- ifelse(india$est_population > 0 & india$p_population <= 0.05, 1, 0)
-
-
-
-
-
-library(sp)
-library(sf)
-
-# Convert the 'sf' object to 'Spatial' class
-india_sp <- as(india, "Spatial")
-
-# Convert the 'Spatial' object to 'SpatialLines'
-india_lines <- as(india_sp, "SpatialLines")
-
-# Create 'polys' list
-polys <- list("sp.lines", india_lines, col = "grey", lwd = 0.8, lty = 1)
-
-
-
-
-
-
-
-col.palette <- colorRampPalette(c("lightcyan", "cyan", "cyan1", "cyan2", "cyan3", "cyan4", "darkblue"), space = "rgb", interpolate = "linear")
-
-
-
-
-
-library(ggplot2)
-
-
-
-library(gridExtra)
-
-
-
-
-library(ggplot2)
-
-# Plotting for est_Recovered
-est_recovered <- ggplot() +
-  geom_sf(data = india, aes(fill = est_Recovered)) +
-  scale_fill_gradientn(colors = col.palette(100)) +
-  labs(title = "Recovered") +
-  theme_minimal()
-
-# Plotting for est_Deceased
-est_deceased <- ggplot() +
-  geom_sf(data = india, aes(fill = est_Deceased)) +
-  scale_fill_gradientn(colors = col.palette(100)) +
-  labs(title = "Deceased") +
-  theme_minimal()
-
-# Plotting for est_Tested
-est_tested <- ggplot() +
-  geom_sf(data = india, aes(fill = est_Tested)) +
-  scale_fill_gradientn(colors = col.palette(100)) +
-  labs(title = "Tested") +
-  theme_minimal()
-
-# Plotting for est_AQIUS
-est_aqius <- ggplot() +
-  geom_sf(data = india, aes(fill = est_AQIUS)) +
-  scale_fill_gradientn(colors = col.palette(100)) +
-  labs(title = "AQIUS") +
-  theme_minimal()
-
-# Plotting for est_PM25
-est_pm25 <- ggplot() +
-  geom_sf(data = india, aes(fill = est_PM25)) +
-  scale_fill_gradientn(colors = col.palette(100)) +
-  labs(title = "PM25") +
-  theme_minimal()
-
-# Plotting for est_PM10
-est_pm10 <- ggplot() +
-  geom_sf(data = india, aes(fill = est_PM10)) +
-  scale_fill_gradientn(colors = col.palette(100)) +
-  labs(title = "PM10") +
-  theme_minimal()
-
-# Plotting for est_Temp
-est_temp <- ggplot() +
-  geom_sf(data = india, aes(fill = est_Temp)) +
-  scale_fill_gradientn(colors = col.palette(100)) +
-  labs(title = "Temp") +
-  theme_minimal()
-
-# Plotting for est_Humid
-est_humid <- ggplot() +
-  geom_sf(data = india, aes(fill = est_Humid)) +
-  scale_fill_gradientn(colors = col.palette(100)) +
-  labs(title = "Humid") +
-  theme_minimal()
-
-# Plotting for est_population
-est_population <- ggplot() +
-  geom_sf(data = india, aes(fill = est_population)) +
-  scale_fill_gradientn(colors = col.palette(100)) +
-  labs(title = "Population") +
-  theme_minimal()
-
+library(GWmodel)      ## GW models
+library(spdep)        ## Spatial autocorrelation
+library(gstat)        ## Geostatistics
+library(RColorBrewer) ## Visualization
+library(classInt)     ## Class intervals
+library(raster)       ## spatial data
+library(gridExtra)    #  Multiple plot
 library(grid)
-library(gridExtra)
-
-# Define the title as a grob
-title_grob <- textGrob("Local Estimates", gp = gpar(fontsize = 25))
-
-# Arrange the plots with the title
-grid.arrange(est_recovered, est_deceased, est_tested, est_aqius, est_pm25, est_pm10, est_temp, est_humid, est_population,
-             ncol = 3, top = title_grob)
-
-
-
-# Define color palette for t-values
-col.palette.t <- colorRampPalette(c("blue", "sky blue", "green", "yellow", "pink", "red"), space = "rgb", interpolate = "linear")
-
-# Plotting for t_Recovered
-t_recovered <- ggplot() +
-  geom_sf(data = india, aes(fill = t_Recovered)) +
-  scale_fill_gradientn(colors = col.palette.t(100)) +
-  labs(title = "Recovered") +
-  theme_minimal()
-
-# Plotting for t_Deceased
-t_deceased <- ggplot() +
-  geom_sf(data = india, aes(fill = t_Deceased)) +
-  scale_fill_gradientn(colors = col.palette.t(100)) +
-  labs(title = "Deceased") +
-  theme_minimal()
-
-# Plotting for t_Tested
-t_tested <- ggplot() +
-  geom_sf(data = india, aes(fill = t_Tested)) +
-  scale_fill_gradientn(colors = col.palette.t(100)) +
-  labs(title = "Tested") +
-  theme_minimal()
-
-# Plotting for t_AQIUS
-t_aqius <- ggplot() +
-  geom_sf(data = india, aes(fill = t_AQIUS)) +
-  scale_fill_gradientn(colors = col.palette.t(100)) +
-  labs(title = "AQIUS") +
-  theme_minimal()
-
-# Plotting for t_PM25
-t_pm25 <- ggplot() +
-  geom_sf(data = india, aes(fill = t_PM25)) +
-  scale_fill_gradientn(colors = col.palette.t(100)) +
-  labs(title = "PM25") +
-  theme_minimal()
-
-# Plotting for t_PM10
-t_pm10 <- ggplot() +
-  geom_sf(data = india, aes(fill = t_PM10)) +
-  scale_fill_gradientn(colors = col.palette.t(100)) +
-  labs(title = "PM10") +
-  theme_minimal()
-
-# Plotting for t_Temp
-t_temp <- ggplot() +
-  geom_sf(data = india, aes(fill = t_Temp)) +
-  scale_fill_gradientn(colors = col.palette.t(100)) +
-  labs(title = "Temp") +
-  theme_minimal()
-
-# Plotting for t_Humid
-t_humid <- ggplot() +
-  geom_sf(data = india, aes(fill = t_Humid)) +
-  scale_fill_gradientn(colors = col.palette.t(100)) +
-  labs(title = "Humid") +
-  theme_minimal()
-
-# Plotting for t_population
-t_population <- ggplot() +
-  geom_sf(data = india, aes(fill = t_population)) +
-  scale_fill_gradientn(colors = col.palette.t(100)) +
-  labs(title = "Population") +
-  theme_minimal()
-
-# Arrange the plots for t-values
-grid.arrange(t_recovered, t_deceased, t_tested, t_aqius, t_pm25, t_pm10, t_temp, t_humid, t_population,
-             ncol = 3, top = textGrob("Local t-values", gp = gpar(fontsize = 25)))
-
-
-
-
-
-
-library(sf)
+library(ggplot2)      # plot
+library(latticeExtra) # advance ploting function
+library(RStoolbox)    # advance raster ploting function
+#library(SpatialML)    # Geographicall Weigted Random Forest
+library(dplyr)
 library(sp)
-# Define color palette
-myPaletteRes <- colorRampPalette(c("lightseagreen", "lightsteelblue1", "moccasin", "hotpink", "red"))
+
+covid_19_data <- read.csv('data/processed_data.csv')
+state_map <- shapefile('assets/gadm36_IND_filtered.shp')
+
+summary(covid_19_data)
+print(state_map)
+aggregated_data <- covid_19_data %>%
+  group_by(State) %>%
+  summarize(
+    across(
+      .cols = !c(Month, Status),  # Exclude Month and Status columns
+      .fns = sum
+    )
+  )
 
 
-# Convert the sf object to SpatialPolygonsDataFrame
-india_spdf <- as(india, "Spatial")
+xy <- aggregated_data[ , c(5:6)]
 
-# Now you can use spplot with india_spdf
-std_res <- spplot(india_spdf, "stdRes", main = "GWRP Std. Residuals",
-                  sp.layout = list(polys),
-                  col = "transparent",
-                  col.regions = myPaletteRes(100))
 
-# Print the plot
+SPDF <- SpatialPointsDataFrame(coords=xy, data = aggregated_data)
+
+SPDF$Confirmed <- scale(SPDF$Confirmed)
+SPDF$PM25 <- scale(SPDF$PM25)
+SPDF$population <- scale(SPDF$population)
+SPDF$Humid <- scale(SPDF$Humid)
+SPDF$Tested <- scale(SPDF$Tested)
+SPDF$Temp <- scale(SPDF$Temp)
+SPDF$PM10 <- scale(SPDF$PM10)
+SPDF$Deceased <- scale(SPDF$Deceased)
+SPDF$AQIUS <- scale(SPDF$AQIUS)
+
+gwr.bw <- bw.gwr(Confirmed ~ PM25+population+Humid+Tested+Temp+PM10+Deceased+AQIUS ,
+                 data = SPDF,
+                 approach = "AICc",
+                 kernel='bisquare',
+                 adaptive=TRUE)
+
+gwr.bw
+
+
+gwr.res <-gwr.basic(Confirmed ~ PM25+population+Humid+Tested+Temp+PM10+Deceased+AQIUS,
+                    data=SPDF,
+                    bw=gwr.bw,
+                    kernel='bisquare',
+                    adaptive=TRUE)
+gwr.res
+
+
+#Extract results for visualizations
+
+
+
+
+state_map@data$y <- gwr.res$SDF$y
+state_map@data$yhat <- gwr.res$SDF$yhat
+state_map@data$residual <- gwr.res$SDF$residual
+rsd=sd(state_map@data$residual)
+state_map@data$stdRes <- (state_map@data$residual) / rsd
+state_map@data$LLN <- state_map@data$yhat-1.645*rsd
+state_map@data$ULN <- state_map@data$yhat+1.654*rsd
+
+#Intercept
+state_map@data$Intercept <- gwr.res$SDF$Intercept
+state_map@data$est_PM25 <- gwr.res$SDF$PM25
+state_map@data$est_population <- gwr.res$SDF$population
+state_map@data$est_Humid <- gwr.res$SDF$Humid
+state_map@data$est_Tested <- gwr.res$SDF$Tested
+state_map@data$est_Temp <- gwr.res$SDF$Temp
+state_map@data$est_PM10 <- gwr.res$SDF$PM10
+state_map@data$est_Deceased <- gwr.res$SDF$Deceased
+
+
+#T-values
+state_map@data$t_Intercept <- gwr.res$SDF$Intercept_TV
+state_map@data$t_PM25 <- gwr.res$SDF$PM25_TV
+state_map@data$t_population <- gwr.res$SDF$population_TV
+state_map@data$t_Humid <- gwr.res$SDF$Humid_TV
+state_map@data$t_Tested <- gwr.res$SDF$Tested_TV
+state_map@data$t_Temp <- gwr.res$SDF$Temp_TV
+state_map@data$t_PM10 <- gwr.res$SDF$PM10_TV
+state_map@data$t_Deceased <- gwr.res$SDF$Deceased_TV
+
+
+#Vizualizations :
+polys<- list("sp.lines", as(state_map, "SpatialLines"), col="grey", lwd=.8,lty=1)
+col.palette<-colorRampPalette(c("blue",  "sky blue", "green","yellow", "red"),space="rgb",interpolate = "linear")
+col.palette<-colorRampPalette(c("lightcyan","cyan","cyan1", "cyan2","cyan3","cyan4", "darkblue"),space="rgb",interpolate = "linear") 
+
+
+est_pop<-spplot(state_map,"est_population", main = "population", 
+                sp.layout=list(polys),
+                col="transparent",
+                col.regions=col.palette(100))
+est_pm25<-spplot(state_map,"est_PM25", main = "PM25", 
+                 sp.layout=list(polys),
+                 col="transparent",
+                 col.regions=col.palette(100))
+est_pm10<-spplot(state_map,"est_PM10", main = "PM10", 
+                 sp.layout=list(polys),
+                 col="transparent",
+                 col.regions=col.palette(100))
+
+est_hum<-spplot(state_map,"est_Humid", main = "humidity", 
+                sp.layout=list(polys),
+                col="transparent",
+                col.regions=col.palette(100))
+est_temp<-spplot(state_map,"est_Temp", main = "Temprature", 
+                 sp.layout=list(polys),
+                 col="transparent",
+                 col.regions=col.palette(100))
+est_Deceased <- spplot(state_map, "est_Deceased", main = "Deceased cases",
+                   sp.layout=list(polys),
+                   col="transparent",
+                   col.regions=col.palette(100))
+
+est_test <- spplot(state_map, "est_Tested", main = "Tested cases",
+                   sp.layout=list(polys),
+                   col="transparent",
+                   col.regions=col.palette(100))
+
+grid.arrange(est_pop,est_pm25,est_pm10, est_hum, est_temp, est_Deceased, est_test,ncol= 3, top = textGrob("Local Estimates",gp=gpar(fontsize=25)))
+
+col.palette.t<-colorRampPalette(c("blue",  "sky blue", "green","yellow","pink", "red"),space="rgb",interpolate = "linear") 
+
+t_pop <- spplot(state_map, "t_population", main="Population",
+                sp.layout=list(polys),
+                col="transparent",
+                col.regions=rev(col.palette.t(100)))
+t_pm25 <- spplot(state_map, "t_PM25", main="PM25",
+                 sp.layout=list(polys),
+                 col="transparent",
+                 col.regions=rev(col.palette.t(100)))
+t_pm10 <- spplot(state_map, "t_PM10", main="PM10",
+                 sp.layout=list(polys),
+                 col="transparent",
+                 col.regions=rev(col.palette.t(100)))
+t_hum <- spplot(state_map, "t_Humid", main="Humidity",
+                sp.layout=list(polys),
+                col="transparent",
+                col.regions=rev(col.palette.t(100)))
+t_Temp <- spplot(state_map, "t_Temp", main="Temprature",
+                 sp.layout=list(polys),
+                 col="transparent",
+                 col.regions=rev(col.palette.t(100)))
+t_Deceased <- spplot(state_map, "t_Deceased", main="Deceased Cases",
+                 sp.layout=list(polys),
+                 col="transparent",
+                 col.regions=rev(col.palette.t(100)))
+t_test <- spplot(state_map, "t_Tested", main="Tested cases",
+                 sp.layout=list(polys),
+                 col="transparent",
+                 col.regions=rev(col.palette.t(100)))
+
+grid.arrange(t_pop, t_pm25, t_pm10, t_hum, t_Temp, t_Deceased, t_test,ncol=3,
+             top=textGrob("Local t-values", gp=gpar(fontsize=25)))
+
+
+
+
+
+myPaletteRes <- colorRampPalette(c("lightseagreen","lightsteelblue1", "moccasin","hotpink", "red"))
+std_res<-spplot(state_map,"stdRes", main = "GWRP Std. Residuals", 
+                sp.layout=list(polys),
+                col="transparent",
+                col.regions=myPaletteRes(100))
+
 print(std_res)
-
-
